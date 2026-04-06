@@ -11,23 +11,115 @@ import * as path from 'path';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 
 export class InfraStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    const envName = this.node.tryGetContext('env') || 'dev';
+    const isProd = envName === 'prod';
+
+    // 1. Implement Cognito User Pool
+    const userPool = new cognito.UserPool(this, 'KineticAtelierUserPool', {
+      userPoolName: 'KineticAtelierUserPool',
+      selfSignUpEnabled: true,
+      signInAliases: { email: true },
+      autoVerify: { email: true },
+      standardAttributes: {
+        email: { required: true, mutable: true },
+      },
+      passwordPolicy: {
+        minLength: 8,
+        requireLowercase: true,
+        requireUppercase: true,
+        requireDigits: true,
+        requireSymbols: true,
+      },
+      removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Google Identity Provider (Placeholder)
+    const googleIdP = new cognito.UserPoolIdentityProviderGoogle(this, 'GoogleIdP', {
+      userPool: userPool,
+      clientId: 'GOOGLE_CLIENT_ID', // Placeholder
+      clientSecret: 'GOOGLE_CLIENT_SECRET', // Placeholder
+      attributeMapping: {
+        email: cognito.ProviderAttribute.GOOGLE_EMAIL,
+      },
+    });
+
+    const userPoolClient = new cognito.UserPoolClient(this, 'KineticAtelierUserPoolClient', {
+      userPool: userPool,
+      oAuth: {
+        flows: {
+          authorizationCodeGrant: true,
+        },
+        scopes: [cognito.OAuthScope.EMAIL, cognito.OAuthScope.OPENID, cognito.OAuthScope.PROFILE],
+        callbackUrls: isProd
+          ? ['https://kinetic-atelier.app/callback', 'kinetic-atelier://callback']
+          : ['http://localhost:5173/callback', 'kinetic-atelier://callback'],
+        logoutUrls: isProd
+          ? ['https://kinetic-atelier.app/logout', 'kinetic-atelier://logout']
+          : ['http://localhost:5173/logout', 'kinetic-atelier://logout'],
+      },
+      supportedIdentityProviders: [
+        cognito.UserPoolClientIdentityProvider.COGNITO,
+        cognito.UserPoolClientIdentityProvider.GOOGLE,
+      ],
+      authFlows: {
+        userSrp: true,
+        custom: true, // For WebAuthn/Passkey
+      },
+    });
+    userPoolClient.node.addDependency(googleIdP);
+
     // 2. Implement DynamoDB Table (KineticAtelierTable)
+
     const table = new dynamodb.Table(this, 'KineticAtelierTable', {
-      tableName: 'KineticAtelierTable',
+      tableName: `KineticAtelierTable-${envName}`,
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev purposes
+      removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
     // 3. Implement EventBridge Custom Event Bus
     const eventBus = new events.EventBus(this, 'KineticAtelierEventBus', {
       eventBusName: 'KineticAtelierEventBus'
+    });
+
+    // Cognito Identity Pool for IAM Auth
+    const identityPool = new cognito.CfnIdentityPool(this, 'KineticAtelierIdentityPool', {
+      allowUnauthenticatedIdentities: false,
+      cognitoIdentityProviders: [
+        {
+          clientId: userPoolClient.userPoolClientId,
+          providerName: userPool.userPoolProviderName,
+        },
+      ],
+    });
+
+    const authenticatedRole = new iam.Role(this, 'CognitoDefaultAuthenticatedRole', {
+      assumedBy: new iam.FederatedPrincipal(
+        'cognito-identity.amazonaws.com',
+        {
+          StringEquals: {
+            'cognito-identity.amazonaws.com:aud': identityPool.ref,
+          },
+          'ForAnyValue:StringLike': {
+            'cognito-identity.amazonaws.com:amr': 'authenticated',
+          },
+        },
+        'sts:AssumeRoleWithWebIdentity'
+      ),
+    });
+
+    new cognito.CfnIdentityPoolRoleAttachment(this, 'IdentityPoolRoleAttachment', {
+      identityPoolId: identityPool.ref,
+      roles: {
+        authenticated: authenticatedRole.roleArn,
+      },
     });
 
     // 4. Implement API Gateway (REST API)
@@ -38,6 +130,12 @@ export class InfraStack extends cdk.Stack {
         allowMethods: apigateway.Cors.ALL_METHODS,
       },
     });
+
+    // Grant authenticated users permission to call the API
+    authenticatedRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['execute-api:Invoke'],
+      resources: [api.arnForExecuteApi()],
+    }));
 
     // IAM Role for API Gateway to put events to EventBridge
     const apiEventBridgeRole = new iam.Role(this, 'ApiEventBridgeRole', {
@@ -83,6 +181,7 @@ export class InfraStack extends cdk.Stack {
       },
     }), {
       methodResponses: [{ statusCode: '200' }],
+      authorizationType: apigateway.AuthorizationType.IAM,
     });
 
     // Vitals Endpoints
@@ -117,6 +216,7 @@ export class InfraStack extends cdk.Stack {
       },
     }), {
       methodResponses: [{ statusCode: '200' }],
+      authorizationType: apigateway.AuthorizationType.IAM,
     });
 
     // GET /vitals -> DynamoDB Query
@@ -155,6 +255,7 @@ export class InfraStack extends cdk.Stack {
       },
     }), {
       methodResponses: [{ statusCode: '200' }],
+      authorizationType: apigateway.AuthorizationType.IAM,
     });
 
     // GET /workouts -> DynamoDB Query
@@ -193,6 +294,53 @@ export class InfraStack extends cdk.Stack {
       },
     }), {
       methodResponses: [{ statusCode: '200' }],
+      authorizationType: apigateway.AuthorizationType.IAM,
+    });
+
+    // Profile Endpoints
+    const profile = api.root.addResource('profile');
+
+    // GET /profile -> DynamoDB GetItem
+    profile.addMethod('GET', new apigateway.AwsIntegration({
+      service: 'dynamodb',
+      action: 'GetItem',
+      options: {
+        credentialsRole: apiDynamoDBRole,
+        requestTemplates: {
+          'application/json': `{
+            "TableName": "${table.tableName}",
+            "Key": {
+              "PK": { "S": "USER#$context.identity.cognitoIdentityId" },
+              "SK": { "S": "PROFILE#$context.identity.cognitoIdentityId" }
+            }
+          }`,
+        },
+        integrationResponses: [
+          {
+            statusCode: '200',
+            responseTemplates: {
+              'application/json': `#set($item = $input.path('$.Item'))
+              {
+                "userId": "$item.PK.S",
+                "name": "$item.name.S",
+                "goals": {
+                  "weight": $item.goals.M.weight.N,
+                  "dailyCalories": $item.goals.M.dailyCalories.N,
+                  "macros": {
+                    "p": $item.goals.M.macros.M.p.N,
+                    "c": $item.goals.M.macros.M.c.N,
+                    "f": $item.goals.M.macros.M.f.N
+                  }
+                },
+                "isPro": $item.isPro.BOOL
+              }`,
+            },
+          },
+        ],
+      },
+    }), {
+      methodResponses: [{ statusCode: '200' }],
+      authorizationType: apigateway.AuthorizationType.IAM,
     });
 
     // Routine Endpoints
@@ -225,6 +373,7 @@ export class InfraStack extends cdk.Stack {
       },
     }), {
       methodResponses: [{ statusCode: '200' }],
+      authorizationType: apigateway.AuthorizationType.IAM,
     });
 
     // GET /routines -> DynamoDB Query
@@ -263,6 +412,7 @@ export class InfraStack extends cdk.Stack {
       },
     }), {
       methodResponses: [{ statusCode: '200' }],
+      authorizationType: apigateway.AuthorizationType.IAM,
     });
 
     // 7. Implement Lambda Functions and Event Rules

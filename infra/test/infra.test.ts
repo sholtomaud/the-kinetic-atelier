@@ -2,6 +2,48 @@ import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import * as Infra from '../lib/infra-stack';
 
+test('Cognito User Pool and Client Created', () => {
+  const app = new cdk.App();
+  const stack = new Infra.InfraStack(app, 'MyTestStack');
+  const template = Template.fromStack(stack);
+
+  template.hasResourceProperties('AWS::Cognito::UserPool', {
+    UserPoolName: 'KineticAtelierUserPool',
+    AdminCreateUserConfig: { AllowAdminCreateUserOnly: false },
+    AutoVerifiedAttributes: ['email'],
+    Schema: Match.arrayWith([
+      Match.objectLike({ Name: 'email', Required: true })
+    ])
+  });
+
+  template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+    SupportedIdentityProviders: ['COGNITO', 'Google'],
+    AllowedOAuthFlows: ['code']
+  });
+});
+
+test('Cognito Identity Pool and IAM Roles Created', () => {
+  const app = new cdk.App();
+  const stack = new Infra.InfraStack(app, 'MyTestStack');
+  const template = Template.fromStack(stack);
+
+  template.hasResourceProperties('AWS::Cognito::IdentityPool', {
+    AllowUnauthenticatedIdentities: false
+  });
+
+  template.hasResourceProperties('AWS::IAM::Role', {
+    AssumeRolePolicyDocument: {
+      Statement: [
+        {
+          Action: 'sts:AssumeRoleWithWebIdentity',
+          Effect: 'Allow',
+          Principal: { Federated: 'cognito-identity.amazonaws.com' }
+        }
+      ]
+    }
+  });
+});
+
 test('DynamoDB Table Created with Correct Keys', () => {
   const app = new cdk.App();
   const stack = new Infra.InfraStack(app, 'MyTestStack');
@@ -17,7 +59,7 @@ test('DynamoDB Table Created with Correct Keys', () => {
       { AttributeName: 'SK', AttributeType: 'S' }
     ],
     BillingMode: 'PAY_PER_REQUEST',
-    TableName: 'KineticAtelierTable'
+    TableName: Match.stringLikeRegexp('KineticAtelierTable-.*')
   });
 });
 
@@ -85,6 +127,7 @@ test('API Gateway Created with Routine Endpoints', () => {
   // Check POST /routines
   template.hasResourceProperties('AWS::ApiGateway::Method', {
     HttpMethod: 'POST',
+    AuthorizationType: 'AWS_IAM',
     ResourceId: { Ref: Match.stringLikeRegexp('KineticAtelierApiroutines.*') },
     Integration: {
       Type: 'AWS',
@@ -96,6 +139,7 @@ test('API Gateway Created with Routine Endpoints', () => {
   // Check GET /routines
   template.hasResourceProperties('AWS::ApiGateway::Method', {
     HttpMethod: 'GET',
+    AuthorizationType: 'AWS_IAM',
     ResourceId: { Ref: Match.stringLikeRegexp('KineticAtelierApiroutines.*') },
     Integration: {
       Type: 'AWS',
@@ -131,6 +175,7 @@ test('API Gateway Created with Workout Endpoints', () => {
   // Check POST /workouts
   template.hasResourceProperties('AWS::ApiGateway::Method', {
     HttpMethod: 'POST',
+    AuthorizationType: 'AWS_IAM',
     ResourceId: { Ref: Match.stringLikeRegexp('KineticAtelierApiworkouts.*') },
     Integration: {
       Type: 'AWS',
@@ -142,6 +187,7 @@ test('API Gateway Created with Workout Endpoints', () => {
   // Check GET /workouts
   template.hasResourceProperties('AWS::ApiGateway::Method', {
     HttpMethod: 'GET',
+    AuthorizationType: 'AWS_IAM',
     ResourceId: { Ref: Match.stringLikeRegexp('KineticAtelierApiworkouts.*') },
     Integration: {
       Type: 'AWS',
@@ -163,6 +209,7 @@ test('API Gateway Created with Vitals Endpoints', () => {
   // Check POST /vitals
   template.hasResourceProperties('AWS::ApiGateway::Method', {
     HttpMethod: 'POST',
+    AuthorizationType: 'AWS_IAM',
     ResourceId: { Ref: Match.stringLikeRegexp('KineticAtelierApivitals.*') },
     Integration: {
       Type: 'AWS',
@@ -174,11 +221,33 @@ test('API Gateway Created with Vitals Endpoints', () => {
   // Check GET /vitals
   template.hasResourceProperties('AWS::ApiGateway::Method', {
     HttpMethod: 'GET',
+    AuthorizationType: 'AWS_IAM',
     ResourceId: { Ref: Match.stringLikeRegexp('KineticAtelierApivitals.*') },
     Integration: {
       Type: 'AWS',
       IntegrationHttpMethod: 'POST',
       Uri: { 'Fn::Join': ['', ['arn:', { Ref: 'AWS::Partition' }, ':apigateway:', { Ref: 'AWS::Region' }, ':dynamodb:action/Query']] }
+    }
+  });
+});
+
+test('API Gateway Created with Profile Endpoint', () => {
+  const app = new cdk.App();
+  const stack = new Infra.InfraStack(app, 'MyTestStack');
+  const template = Template.fromStack(stack);
+
+  template.hasResourceProperties('AWS::ApiGateway::Resource', {
+    PathPart: 'profile'
+  });
+
+  template.hasResourceProperties('AWS::ApiGateway::Method', {
+    HttpMethod: 'GET',
+    AuthorizationType: 'AWS_IAM',
+    ResourceId: { Ref: Match.stringLikeRegexp('KineticAtelierApiprofile.*') },
+    Integration: {
+      Type: 'AWS',
+      IntegrationHttpMethod: 'POST',
+      Uri: { 'Fn::Join': ['', ['arn:', { Ref: 'AWS::Partition' }, ':apigateway:', { Ref: 'AWS::Region' }, ':dynamodb:action/GetItem']] }
     }
   });
 });
