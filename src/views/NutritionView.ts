@@ -87,22 +87,17 @@ export class NutritionView extends BaseComponent {
           <aside class="lg:col-span-4 space-y-8">
             <div class="bg-surface-container-lowest p-8 rounded-3xl border border-outline-variant/15 shadow-sm">
               <h3 class="text-2xl font-bold mb-8">Fuel Quota</h3>
-              <div id="quota-chart" class="h-48 w-full flex items-center justify-center mb-8"></div>
-              <div class="space-y-6">
+              <div id="quota-chart" class="h-48 w-full flex items-center justify-center mb-10"></div>
+              <div class="grid grid-cols-3 gap-4">
                 ${['Protein', 'Carbs', 'Fats'].map(macro => {
                   const key = macro[0].toLowerCase() as 'p' | 'c' | 'f';
                   const consumed = todayLog ? todayLog.macrosConsumed[key] : 0;
-                  const goal = goals.macros[key];
-                  const pct = Math.min((consumed / goal) * 100, 100);
-                  const color = macro === 'Protein' ? 'bg-primary' : (macro === 'Carbs' ? 'bg-secondary' : 'bg-primary-container');
                   return `
-                    <div class="space-y-2">
-                      <div class="flex justify-between items-center text-sm font-bold">
-                        <span>${macro}</span>
-                        <span class="text-on-surface-variant">${consumed}g / ${goal}g</span>
-                      </div>
-                      <div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
-                        <div class="h-full ${color}" style="width: ${pct}%"></div>
+                    <div class="flex flex-col items-center gap-3">
+                      <div id="${macro.toLowerCase()}-chart" class="w-16 h-16"></div>
+                      <div class="text-center">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">${macro}</p>
+                        <p class="text-xs font-bold text-on-surface">${consumed}g</p>
                       </div>
                     </div>
                   `;
@@ -151,9 +146,14 @@ export class NutritionView extends BaseComponent {
 
       const last30Logs = [...state.nutrition]
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-        .slice(-12); // Display last 12 entries for better spacing
+        .slice(-12);
 
-      const data = last30Logs.length > 1 ? last30Logs.map(n => n.weight) : [85, 82, 84, 80, 78, 81, 76, 74, 77, 71, 73, 69];
+      const data = last30Logs.length > 1 ? last30Logs.map(n => ({ date: n.date, weight: n.weight })) : [
+        { date: '1', weight: 85 }, { date: '2', weight: 82 }, { date: '3', weight: 84 },
+        { date: '4', weight: 80 }, { date: '5', weight: 78 }, { date: '6', weight: 81 },
+        { date: '7', weight: 76 }, { date: '8', weight: 74 }, { date: '9', weight: 77 },
+        { date: '10', weight: 71 }, { date: '11', weight: 73 }, { date: '12', weight: 69 }
+      ];
       const margin = { top: 20, right: 20, bottom: 30, left: 40 };
 
       const svg = d3.select(trajectoryChartEl)
@@ -161,41 +161,69 @@ export class NutritionView extends BaseComponent {
         .attr('width', width)
         .attr('height', height);
 
-      const x = d3.scaleBand()
+      const x = d3.scalePoint()
         .domain(data.map((_, i) => i.toString()))
-        .range([margin.left, width - margin.right])
-        .padding(0.2);
+        .range([margin.left, width - margin.right]);
 
       const y = d3.scaleLinear()
-        .domain([Math.min(...data) - 5, Math.max(...data) + 5])
+        .domain([d3.min(data, d => d.weight)! - 2, d3.max(data, d => d.weight)! + 2])
         .range([height - margin.bottom, margin.top]);
 
-      svg.selectAll('rect')
+      const area = d3.area<any>()
+        .x((_, i) => x(i.toString())!)
+        .y0(height - margin.bottom)
+        .y1(d => y(d.weight))
+        .curve(d3.curveMonotoneX);
+
+      const line = d3.line<any>()
+        .x((_, i) => x(i.toString())!)
+        .y(d => y(d.weight))
+        .curve(d3.curveMonotoneX);
+
+      const gradient = svg.append('defs')
+        .append('linearGradient')
+        .attr('id', 'weight-gradient')
+        .attr('x1', '0%')
+        .attr('y1', '0%')
+        .attr('x2', '0%')
+        .attr('y2', '100%');
+
+      gradient.append('stop').attr('offset', '0%').attr('stop-color', '#006479').attr('stop-opacity', 0.3);
+      gradient.append('stop').attr('offset', '100%').attr('stop-color', '#006479').attr('stop-opacity', 0);
+
+      svg.append('path')
+        .datum(data)
+        .attr('fill', 'url(#weight-gradient)')
+        .attr('d', area);
+
+      svg.append('path')
+        .datum(data)
+        .attr('fill', 'none')
+        .attr('stroke', '#006479')
+        .attr('stroke-width', 3)
+        .attr('d', line);
+
+      svg.selectAll('.dot')
         .data(data)
         .enter()
-        .append('rect')
-        .attr('x', (_, i) => x(i.toString())!)
-        .attr('y', d => y(d))
-        .attr('width', x.bandwidth())
-        .attr('height', d => Math.max(0, height - margin.bottom - y(d)))
-        .attr('fill', (_, i) => i === data.length - 1 ? '#006479' : '#00647922')
-        .attr('rx', 4);
+        .append('circle')
+        .attr('cx', (_, i) => x(i.toString())!)
+        .attr('cy', d => y(d.weight))
+        .attr('r', 4)
+        .attr('fill', '#fff')
+        .attr('stroke', '#006479')
+        .attr('stroke-width', 2);
     }
 
-    const quotaChartEl = this.querySelector('#quota-chart') as HTMLElement;
-    if (quotaChartEl) {
-      quotaChartEl.innerHTML = '';
-      const width = quotaChartEl.clientWidth;
-      const height = quotaChartEl.clientHeight || 192;
-      const radius = Math.min(width, height) / 2 - 10;
+    const renderCircularProgress = (selector: string, percentage: number, color: string, value: string, label?: string) => {
+      const el = this.querySelector(selector) as HTMLElement;
+      if (!el) return;
+      el.innerHTML = '';
+      const width = el.clientWidth;
+      const height = el.clientHeight;
+      const radius = Math.min(width, height) / 2;
 
-      const todayStr = new Date().toISOString().split('T')[0];
-      const todayLog = state.nutrition.find(n => n.date === todayStr);
-      const consumed = todayLog ? todayLog.caloriesConsumed : 0;
-      const goal = state.user.goals.dailyCalories;
-      const percentage = Math.min(consumed / goal, 1);
-
-      const svg = d3.select(quotaChartEl)
+      const svg = d3.select(el)
         .append('svg')
         .attr('width', width)
         .attr('height', height)
@@ -203,31 +231,57 @@ export class NutritionView extends BaseComponent {
         .attr('transform', `translate(${width / 2},${height / 2})`);
 
       const arc = d3.arc()
-        .innerRadius(radius - 12)
+        .innerRadius(radius - 6)
         .outerRadius(radius)
         .startAngle(0);
 
       svg.append('path')
         .datum({ endAngle: 2 * Math.PI })
-        .style('fill', '#adecff')
+        .style('fill', '#e0f3f7')
         .attr('d', arc as any);
 
       svg.append('path')
-        .datum({ endAngle: 2 * Math.PI * percentage })
-        .style('fill', '#006a35')
+        .datum({ endAngle: 2 * Math.PI * Math.min(percentage, 1) })
+        .style('fill', color)
         .attr('d', arc as any);
 
-      svg.append('text')
-        .attr('text-anchor', 'middle')
-        .attr('dy', '0em')
-        .attr('class', 'font-headline font-bold text-3xl fill-on-surface')
-        .text(consumed.toLocaleString());
-      svg.append('text')
-        .attr('text-anchor', 'middle')
-        .attr('dy', '1.5em')
-        .attr('class', 'text-[10px] font-bold uppercase tracking-widest fill-on-surface-variant')
-        .text('kcal consumed');
+      if (label) {
+        svg.append('text')
+          .attr('text-anchor', 'middle')
+          .attr('dy', '0em')
+          .attr('class', 'font-bold text-xl fill-on-surface')
+          .text(value);
+        svg.append('text')
+          .attr('text-anchor', 'middle')
+          .attr('dy', '1.5em')
+          .attr('class', 'text-[8px] font-black uppercase tracking-tighter fill-on-surface-variant')
+          .text(label);
+      } else {
+        svg.append('text')
+          .attr('text-anchor', 'middle')
+          .attr('dy', '0.35em')
+          .attr('class', 'font-bold text-xs fill-on-surface')
+          .text(Math.round(percentage * 100) + '%');
+      }
+    };
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayLog = state.nutrition.find(n => n.date === todayStr);
+
+    const quotaChartEl = this.querySelector('#quota-chart') as HTMLElement;
+    if (quotaChartEl) {
+      const consumed = todayLog ? todayLog.caloriesConsumed : 0;
+      const goal = state.user.goals.dailyCalories;
+      renderCircularProgress('#quota-chart', consumed / goal, '#006a35', consumed.toLocaleString(), 'kcal consumed');
     }
+
+    ['protein', 'carbs', 'fats'].forEach(macro => {
+      const key = macro[0] as 'p' | 'c' | 'f';
+      const consumed = todayLog ? todayLog.macrosConsumed[key] : 0;
+      const goal = state.user.goals.macros[key];
+      const color = macro === 'protein' ? '#006479' : (macro === 'carbs' ? '#006a35' : '#4a6367');
+      renderCircularProgress(`#${macro}-chart`, consumed / goal, color, consumed.toString(), `${goal}g`);
+    });
   }
 }
 
