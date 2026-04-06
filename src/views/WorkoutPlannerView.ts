@@ -1,9 +1,10 @@
 import { BaseComponent } from '@/core/BaseComponent';
-import { store, Routine } from '@/core/Store';
+import { store, Routine, Workout } from '@/core/Store';
 
 export class WorkoutPlannerView extends BaseComponent {
   private currentMonth = new Date().getMonth();
   private currentYear = new Date().getFullYear();
+  private selectedDate: Date = new Date();
   private unsubscribe: (() => void) | null = null;
   private selectedExercises: string[] = [];
 
@@ -23,7 +24,6 @@ export class WorkoutPlannerView extends BaseComponent {
 
     const daysInMonth = new Date(this.currentYear, this.currentMonth + 1, 0).getDate();
     const firstDayOfMonth = new Date(this.currentYear, this.currentMonth, 1).getDay();
-    // Adjust for Monday start (0=Sun, 1=Mon... -> 0=Mon, 6=Sun)
     const startOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
 
     const monthName = new Date(this.currentYear, this.currentMonth).toLocaleString('default', { month: 'long' });
@@ -66,20 +66,28 @@ export class WorkoutPlannerView extends BaseComponent {
 
                 ${Array.from({ length: daysInMonth }, (_, i) => {
                   const day = i + 1;
-                  const dateStr = new Date(this.currentYear, this.currentMonth, day).toDateString();
+                  const date = new Date(this.currentYear, this.currentMonth, day);
+                  const dateStr = date.toDateString();
                   const hasWorkout = workouts.some(w => new Date(w.date).toDateString() === dateStr);
+                  const isSelected = this.selectedDate.toDateString() === dateStr;
                   const isToday = new Date().toDateString() === dateStr;
 
-                  const baseClasses = "flex flex-col justify-between cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all shadow-sm p-2 sm:p-3 min-h-[60px] sm:min-h-[80px]";
-                  const shapeClasses = isToday
-                    ? "rounded-2xl sm:rounded-xl bg-primary text-on-primary shadow-lg shadow-primary/20"
+                  const baseClasses = "calendar-day flex flex-col justify-between cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all shadow-sm p-2 sm:p-3 min-h-[60px] sm:min-h-[80px]";
+                  let shapeClasses = isSelected
+                    ? "rounded-2xl sm:rounded-xl ring-2 ring-primary bg-primary/10"
                     : "rounded-2xl sm:rounded-xl bg-surface-container-lowest";
 
+                  if (isToday && !isSelected) {
+                    shapeClasses = "rounded-2xl sm:rounded-xl bg-primary text-on-primary shadow-lg shadow-primary/20";
+                  } else if (isToday && isSelected) {
+                    shapeClasses = "rounded-2xl sm:rounded-xl ring-2 ring-primary bg-primary text-on-primary shadow-lg shadow-primary/20";
+                  }
+
                   return `
-                    <div class="${baseClasses} ${shapeClasses}">
+                    <div class="${baseClasses} ${shapeClasses}" data-day="${day}">
                       <span class="text-xs font-bold">${day}</span>
                       <div class="flex flex-col items-center gap-1">
-                        ${hasWorkout ? '<i data-lucide="zap" class="w-3 h-3 text-secondary"></i>' : ''}
+                        ${hasWorkout ? `<i data-lucide="zap" class="w-3 h-3 ${isToday ? 'text-on-primary' : 'text-secondary'}"></i>` : ''}
                       </div>
                     </div>
                   `;
@@ -107,7 +115,7 @@ export class WorkoutPlannerView extends BaseComponent {
                         <div class="flex -space-x-2">
                           <div class="w-6 h-6 rounded-full border-2 border-white bg-slate-300"></div>
                         </div>
-                        <button class="text-primary font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">Add to Plan <i data-lucide="arrow-right" class="w-3 h-3"></i></button>
+                        <button class="add-to-plan-btn text-primary font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all" data-id="${r.id}">Add to Plan <i data-lucide="arrow-right" class="w-3 h-3"></i></button>
                       </div>
                     </div>
                 `).join('')}
@@ -142,9 +150,15 @@ export class WorkoutPlannerView extends BaseComponent {
                 ` : `
                     <div class="w-full space-y-2">
                         ${this.selectedExercises.map((ex, idx) => `
-                            <div class="flex items-center justify-between p-3 bg-surface-container-lowest rounded-lg shadow-sm">
-                                <span class="text-sm font-bold">${ex}</span>
-                                <button class="remove-ex-btn text-error" data-index="${idx}"><i data-lucide="trash" class="w-4 h-4"></i></button>
+                            <div class="flex items-center justify-between p-3 bg-surface-container-lowest rounded-lg shadow-sm group/item">
+                                <div class="flex items-center gap-2">
+                                  <div class="flex flex-col gap-0.5">
+                                    <button class="move-up text-outline-variant hover:text-primary disabled:opacity-0" data-index="${idx}" ${idx === 0 ? 'disabled' : ''}><i data-lucide="chevron-up" class="w-3 h-3"></i></button>
+                                    <button class="move-down text-outline-variant hover:text-primary disabled:opacity-0" data-index="${idx}" ${idx === this.selectedExercises.length - 1 ? 'disabled' : ''}><i data-lucide="chevron-down" class="w-3 h-3"></i></button>
+                                  </div>
+                                  <span class="text-sm font-bold">${ex}</span>
+                                </div>
+                                <button class="remove-ex-btn text-outline-variant hover:text-error opacity-0 group-hover/item:opacity-100 transition-opacity" data-index="${idx}"><i data-lucide="trash" class="w-4 h-4"></i></button>
                             </div>
                         `).join('')}
                     </div>
@@ -177,6 +191,35 @@ export class WorkoutPlannerView extends BaseComponent {
             this.currentYear++;
         }
         this.renderComponent(true);
+    });
+
+    this.querySelectorAll('.calendar-day').forEach(el => {
+        el.addEventListener('click', () => {
+            const day = Number(el.getAttribute('data-day'));
+            this.selectedDate = new Date(this.currentYear, this.currentMonth, day);
+            this.renderComponent(true);
+        });
+    });
+
+    this.querySelectorAll('.add-to-plan-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = btn.getAttribute('data-id');
+            const routine = store.getState().routines.find(r => r.id === id);
+            if (routine) {
+                const workout: Workout = {
+                    id: crypto.randomUUID(),
+                    date: this.selectedDate.toISOString(),
+                    title: routine.name,
+                    type: (routine.type as any) || 'Strength',
+                    duration: routine.duration,
+                    volume: 0,
+                    exercises: routine.exercises.map(ex => ({ name: ex, sets: [] }))
+                };
+                store.addWorkout(workout);
+                alert(`Added ${routine.name} to ${this.selectedDate.toLocaleDateString()}`);
+            }
+        });
     });
 
     // Drag & Drop
@@ -222,6 +265,30 @@ export class WorkoutPlannerView extends BaseComponent {
             const idx = Number(btn.getAttribute('data-index'));
             this.selectedExercises.splice(idx, 1);
             this.renderComponent(true);
+        });
+    });
+
+    this.querySelectorAll('.move-up').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const idx = Number(btn.getAttribute('data-index'));
+            if (idx > 0) {
+                const temp = this.selectedExercises[idx];
+                this.selectedExercises[idx] = this.selectedExercises[idx-1];
+                this.selectedExercises[idx-1] = temp;
+                this.renderComponent(true);
+            }
+        });
+    });
+
+    this.querySelectorAll('.move-down').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const idx = Number(btn.getAttribute('data-index'));
+            if (idx < this.selectedExercises.length - 1) {
+                const temp = this.selectedExercises[idx];
+                this.selectedExercises[idx] = this.selectedExercises[idx+1];
+                this.selectedExercises[idx+1] = temp;
+                this.renderComponent(true);
+            }
         });
     });
 

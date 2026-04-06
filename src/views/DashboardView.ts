@@ -51,7 +51,7 @@ export class DashboardView extends BaseComponent {
 
     const recentWorkouts = [...workouts]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 2);
+      .slice(0, 3);
 
     return `
       <div class="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
