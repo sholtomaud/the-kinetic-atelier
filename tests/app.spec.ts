@@ -7,14 +7,15 @@ test.describe('Kinetic Atelier App', () => {
 
     await page.goto('/');
 
-    // Check if #root contains anything
-    const root = page.locator('#root');
-    await expect(root).toBeVisible();
+    // Wait for AppLayout to be registered and rendered
+    await page.waitForFunction(() => customElements.get('app-layout') !== undefined);
 
+    // Check if #root has children
+    const root = page.locator('#root');
+    await expect(root.locator('app-layout')).toBeAttached({ timeout: 10000 });
+
+    // Wait for DashboardView to be rendered inside AppRouter
     const dashboard = page.locator('dashboard-view');
     await expect(dashboard).toBeAttached({ timeout: 10000 });
-
-    const html = await page.content();
-    console.log('Full Page content:', html);
   });
 });

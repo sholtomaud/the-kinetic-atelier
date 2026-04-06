@@ -83,10 +83,7 @@ export class AppLayout extends BaseComponent {
           existing.forEach(node => outlet.appendChild(node));
       }
       this.dataset.rendered = 'true';
-      this.afterRender();
   }
-
-  protected update() {}
 }
 
 customElements.define('app-layout', AppLayout);

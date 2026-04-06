@@ -37,7 +37,7 @@ export class WorkoutPlannerView extends BaseComponent {
                 `).join('')}
                 ${Array.from({ length: 31 }, (_, i) => {
                   const day = i + 1;
-                  let baseClasses = "flex flex-col justify-between cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all shadow-sm p-2 sm:p-3 min-h-[60px] sm:min-h-[80px]";
+                  const baseClasses = "flex flex-col justify-between cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all shadow-sm p-2 sm:p-3 min-h-[60px] sm:min-h-[80px]";
                   let shapeClasses = "rounded-2xl sm:rounded-xl bg-surface-container-lowest";
 
                   if (day === 2) shapeClasses = "rounded-2xl sm:rounded-xl bg-primary text-on-primary shadow-lg shadow-primary/20";

@@ -80,17 +80,18 @@ Call log:
   7  |
   8  |     await page.goto('/');
   9  |
-  10 |     // Check if #root contains anything
-  11 |     const root = page.locator('#root');
-  12 |     await expect(root).toBeVisible();
-  13 |
-  14 |     const dashboard = page.locator('dashboard-view');
-> 15 |     await expect(dashboard).toBeAttached({ timeout: 10000 });
-     |                             ^ Error: expect(locator).toBeAttached() failed
+  10 |     // Wait for AppLayout to be registered and rendered
+  11 |     await page.waitForFunction(() => customElements.get('app-layout') !== undefined);
+  12 |
+  13 |     // Check if #root has children
+  14 |     const root = page.locator('#root');
+  15 |     await expect(root.locator('app-layout')).toBeAttached({ timeout: 10000 });
   16 |
-  17 |     const html = await page.content();
-  18 |     console.log('Full Page content:', html);
-  19 |   });
-  20 | });
-  21 |
+  17 |     // Wait for DashboardView to be rendered inside AppRouter
+  18 |     const dashboard = page.locator('dashboard-view');
+> 19 |     await expect(dashboard).toBeAttached({ timeout: 10000 });
+     |                             ^ Error: expect(locator).toBeAttached() failed
+  20 |   });
+  21 | });
+  22 |
 ```

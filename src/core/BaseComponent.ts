@@ -8,10 +8,10 @@ export abstract class BaseComponent extends HTMLElement {
   }
 
   connectedCallback() {
-    this.update();
+    this.renderComponent();
   }
 
-  protected update() {
+  protected renderComponent() {
     if (this.dataset.rendered) return;
     this.innerHTML = this.render();
     this.renderIcons();
@@ -21,7 +21,7 @@ export abstract class BaseComponent extends HTMLElement {
 
   protected renderIcons() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    createIcons({ icons: icons as any });
+    createIcons({ icons: icons as any, nameAttr: 'data-lucide' });
   }
 
   protected afterRender() {}
