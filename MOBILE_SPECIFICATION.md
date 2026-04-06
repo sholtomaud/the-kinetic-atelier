@@ -82,3 +82,19 @@ The Kinetic Atelier mobile application is a native SwiftUI companion to the web 
   - HealthKit permissions for data syncing.
   - Notifications for workout reminders and goal achievements.
 - **Offline Support**: Local persistence (SwiftData or Core Data) with background synchronization to the AWS cloud backend.
+
+## 5. Tooling & CI/CD Requirements
+
+### 5.1 Jules Environment Requirements
+- **Swift Toolchain**: Installation of the Swift compiler and Swift Package Manager (SPM) for building and testing on Linux/macOS.
+- **Testing Framework**: Native `XCTest` for unit and integration testing.
+- **Mocking**: Use of protocols and dependency injection to facilitate testing of Vision and HealthKit components without hardware access.
+- **Build Automation**: Makefile or Swift Package scripts to run `swift build` and `swift test` within the CLI environment.
+
+### 5.2 GitHub Actions Requirements
+- **Runner**: macOS-latest runner to access Xcode command line tools (`xcodebuild`).
+- **CI Workflow**:
+  - **Linting**: Integration of `SwiftLint` to enforce style and conventions.
+  - **Unit Tests**: Execute `xcodebuild test` for the iOS target using a destination simulator (e.g., iPhone 15).
+  - **Build Verification**: Ensure the app compiles for both iOS and Simulator architectures.
+  - **Artifacts**: Upload test results and build logs for failure diagnosis.
