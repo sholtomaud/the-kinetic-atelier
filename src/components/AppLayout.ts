@@ -74,19 +74,19 @@ export class AppLayout extends BaseComponent {
   }
 
   connectedCallback() {
-      const existingChildren = Array.from(this.childNodes);
+      if (this.dataset.rendered) return;
+      const existing = Array.from(this.childNodes);
       this.innerHTML = this.render();
       this.renderIcons();
-      const content = this.querySelector('#layout-content');
-      if (content) {
-          existingChildren.forEach(child => content.appendChild(child));
+      const outlet = this.querySelector('#layout-content');
+      if (outlet) {
+          existing.forEach(node => outlet.appendChild(node));
       }
+      this.dataset.rendered = 'true';
       this.afterRender();
   }
 
-  protected update() {
-      // Manual update since we manage our own children
-  }
+  protected update() {}
 }
 
 customElements.define('app-layout', AppLayout);
