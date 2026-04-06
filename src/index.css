@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800;900&family=Manrope:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-headline: "Lexend", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-label: "Manrope", ui-sans-serif, system-ui, sans-serif;
+
+  --color-surface: #e9f9ff;
+  --color-surface-container: #bff0ff;
+  --color-surface-container-low: #d9f6ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-high: #adecff;
+  --color-surface-container-highest: #9be8fe;
+  --color-surface-variant: #9be8fe;
+  --color-surface-dim: #8ce1f8;
+  --color-surface-bright: #e9f9ff;
+
+  --color-primary: #006479;
+  --color-primary-dim: #00576a;
+  --color-primary-container: #40cef3;
+  --color-primary-fixed: #40cef3;
+  --color-primary-fixed-dim: #28c0e4;
+
+  --color-secondary: #006a35;
+  --color-secondary-dim: #005c2d;
+  --color-secondary-container: #6bfe9c;
+  --color-secondary-fixed: #6bfe9c;
+  --color-secondary-fixed-dim: #5bef90;
+
+  --color-tertiary: #3d6168;
+  --color-tertiary-dim: #31555c;
+  --color-tertiary-container: #cef5fd;
+  --color-tertiary-fixed: #cef5fd;
+  --color-tertiary-fixed-dim: #c0e6ee;
+
+  --color-on-surface: #00343e;
+  --color-on-surface-variant: #2c6370;
+  --color-on-primary: #e0f6ff;
+  --color-on-primary-container: #00414f;
+  --color-on-primary-fixed: #002a34;
+  --color-on-primary-fixed-variant: #004a5a;
+  --color-on-secondary: #cdffd4;
+  --color-on-secondary-container: #005f2f;
+  --color-on-secondary-fixed: #004a23;
+  --color-on-secondary-fixed-variant: #006a35;
+  --color-on-tertiary: #d9f8ff;
+  --color-on-tertiary-container: #3a5e65;
+  --color-on-tertiary-fixed: #274b52;
+  --color-on-tertiary-fixed-variant: #45686f;
+
+  --color-outline: #4a7e8d;
+  --color-outline-variant: #81b5c4;
+  --color-inverse-surface: #001115;
+  --color-inverse-on-surface: #70a5b4;
+  --color-inverse-primary: #40cef3;
+
+  --color-error: #b31b25;
+  --color-error-dim: #9f0519;
+  --color-error-container: #fb5151;
+  --color-on-error: #ffefee;
+  --color-on-error-container: #570008;
+
+  --radius-xxl: 1.5rem;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-on-surface font-body;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-headline;
+  }
+}
+
+.glass-panel {
+  background: rgba(155, 232, 254, 0.6);
+  backdrop-filter: blur(16px);
+}
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #81b5c4; border-radius: 10px; }
+
+.primary-gradient {
+  background: linear-gradient(135deg, #006479 0%, #40cef3 100%);
+}
