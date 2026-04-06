@@ -1,8 +1,31 @@
 import { BaseComponent } from '@/core/BaseComponent';
 import * as d3 from 'd3';
+import { store } from '@/core/Store';
 
 export class NutritionView extends BaseComponent {
+  private unsubscribe: (() => void) | null = null;
+
+  connectedCallback() {
+    super.connectedCallback();
+    this.unsubscribe = store.subscribe(() => this.renderComponent(true));
+  }
+
+  disconnectedCallback() {
+    if (this.unsubscribe) this.unsubscribe();
+  }
+
   protected render() {
+    const state = store.getState();
+    const nutrition = state.nutrition;
+    const goals = state.user.goals;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayLog = nutrition.find(n => n.date === todayStr);
+
+    const currentWeight = todayLog ? todayLog.weight : (nutrition.length > 0 ? nutrition[nutrition.length - 1].weight : 180);
+    const lastWeight = nutrition.length > 1 ? nutrition[nutrition.length - 2].weight : currentWeight;
+    const weightDiff = currentWeight - lastWeight;
+
     return `
       <div class="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
         <header class="flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -12,7 +35,7 @@ export class NutritionView extends BaseComponent {
           </div>
           <div class="bg-surface-container-low px-6 py-3 rounded-2xl flex items-center gap-3 border border-outline-variant/10 shadow-sm">
             <i data-lucide="calendar" class="text-primary"></i>
-            <span class="font-bold text-on-surface">Oct 12 - Nov 11</span>
+            <span class="font-bold text-on-surface">Last 30 Days</span>
           </div>
         </header>
 
@@ -25,40 +48,39 @@ export class NutritionView extends BaseComponent {
                   <p class="text-on-surface-variant font-medium">Last 30 days performance</p>
                 </div>
                 <div class="text-right">
-                  <span class="text-4xl font-bold text-primary">184.2 <span class="text-sm font-normal text-on-surface-variant">lbs</span></span>
-                  <p class="text-secondary font-bold flex items-center justify-end gap-1">
-                    <i data-lucide="trending-down" class="w-4 h-4"></i> 2.4 lbs
+                  <span class="text-4xl font-bold text-primary">${currentWeight.toFixed(1)} <span class="text-sm font-normal text-on-surface-variant">lbs</span></span>
+                  <p class="${weightDiff <= 0 ? 'text-secondary' : 'text-error'} font-bold flex items-center justify-end gap-1">
+                    <i data-lucide="${weightDiff <= 0 ? 'trending-down' : 'trending-up'}" class="w-4 h-4"></i> ${Math.abs(weightDiff).toFixed(1)} lbs
                   </p>
                 </div>
               </div>
               <div id="trajectory-chart" class="h-64 w-full"></div>
               <div class="flex justify-between mt-4 text-xs font-bold text-on-surface-variant/60">
-                <span>OCT 12</span>
-                <span>OCT 22</span>
-                <span>NOV 01</span>
+                <span>30D AGO</span>
+                <span>15D AGO</span>
                 <span>TODAY</span>
               </div>
             </div>
 
             <div class="bg-surface-container-low p-8 rounded-3xl border border-outline-variant/15 shadow-sm">
               <h3 class="text-2xl font-bold mb-6 text-on-surface">Daily Log</h3>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <form id="biometric-form" class="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div class="space-y-4">
                   <label class="block text-sm font-bold text-on-surface-variant">Current Weight (lbs)</label>
                   <div class="relative">
-                    <input type="text" placeholder="184.2" class="w-full bg-surface-container-lowest border-none rounded-2xl p-4 focus:ring-2 focus:ring-primary/40 text-xl font-bold">
+                    <input type="number" step="0.1" name="weight" value="${currentWeight}" placeholder="184.2" class="w-full bg-surface-container-lowest border-none rounded-2xl p-4 focus:ring-2 focus:ring-primary/40 text-xl font-bold">
                     <i data-lucide="scale" class="absolute right-4 top-1/2 -translate-y-1/2 text-primary"></i>
                   </div>
                 </div>
                 <div class="space-y-4">
                   <label class="block text-sm font-bold text-on-surface-variant">Body Fat (%)</label>
                   <div class="relative">
-                    <input type="text" placeholder="14.5" class="w-full bg-surface-container-lowest border-none rounded-2xl p-4 focus:ring-2 focus:ring-primary/40 text-xl font-bold">
+                    <input type="number" step="0.1" name="bodyFat" value="${todayLog ? todayLog.bodyFat : 15}" placeholder="14.5" class="w-full bg-surface-container-lowest border-none rounded-2xl p-4 focus:ring-2 focus:ring-primary/40 text-xl font-bold">
                     <i data-lucide="activity" class="absolute right-4 top-1/2 -translate-y-1/2 text-primary"></i>
                   </div>
                 </div>
-              </div>
-              <button class="mt-8 w-full primary-gradient text-on-primary py-4 rounded-2xl font-bold shadow-xl shadow-primary/20 transform active:scale-95 transition-all">Record Today's Progress</button>
+                <button type="submit" class="md:col-span-2 primary-gradient text-on-primary py-4 rounded-2xl font-bold shadow-xl shadow-primary/20 transform active:scale-95 transition-all">Record Today's Progress</button>
+              </form>
             </div>
           </div>
 
@@ -67,39 +89,32 @@ export class NutritionView extends BaseComponent {
               <h3 class="text-2xl font-bold mb-8">Fuel Quota</h3>
               <div id="quota-chart" class="h-48 w-full flex items-center justify-center mb-8"></div>
               <div class="space-y-6">
-                <div class="space-y-2">
-                  <div class="flex justify-between items-center text-sm font-bold">
-                    <span>Protein</span>
-                    <span class="text-on-surface-variant">142g / 180g</span>
-                  </div>
-                  <div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
-                    <div class="h-full bg-primary" style="width: 78%"></div>
-                  </div>
-                </div>
-                <div class="space-y-2">
-                  <div class="flex justify-between items-center text-sm font-bold">
-                    <span>Carbs</span>
-                    <span class="text-on-surface-variant">64g / 250g</span>
-                  </div>
-                  <div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
-                    <div class="h-full bg-secondary" style="width: 25%"></div>
-                  </div>
-                </div>
-                <div class="space-y-2">
-                  <div class="flex justify-between items-center text-sm font-bold">
-                    <span>Fats</span>
-                    <span class="text-on-surface-variant">32g / 70g</span>
-                  </div>
-                  <div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
-                    <div class="h-full bg-primary-container" style="width: 45%"></div>
-                  </div>
-                </div>
+                ${['Protein', 'Carbs', 'Fats'].map(macro => {
+                  const key = macro[0].toLowerCase() as 'p' | 'c' | 'f';
+                  const consumed = todayLog ? todayLog.macrosConsumed[key] : 0;
+                  const goal = goals.macros[key];
+                  const pct = Math.min((consumed / goal) * 100, 100);
+                  const color = macro === 'Protein' ? 'bg-primary' : (macro === 'Carbs' ? 'bg-secondary' : 'bg-primary-container');
+                  return `
+                    <div class="space-y-2">
+                      <div class="flex justify-between items-center text-sm font-bold">
+                        <span>${macro}</span>
+                        <span class="text-on-surface-variant">${consumed}g / ${goal}g</span>
+                      </div>
+                      <div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+                        <div class="h-full ${color}" style="width: ${pct}%"></div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
               </div>
             </div>
             <div class="glass-panel p-8 rounded-3xl border border-white/20 shadow-lg">
               <h4 class="font-bold text-on-surface mb-4">Atelier Insight</h4>
               <p class="text-sm text-on-surface-variant leading-relaxed mb-6">
-                Your protein intake is optimal for muscle preservation. Increase fiber-rich carbs by 15% this evening.
+                ${todayLog && todayLog.macrosConsumed.p < goals.macros.p * 0.8
+                  ? 'Your protein intake is low today. Consider a shake to support muscle preservation.'
+                  : 'Your macronutrient distribution is optimal for your current goals.'}
               </p>
               <div class="flex items-center gap-3">
                 <i data-lucide="zap" class="text-secondary fill-current"></i>
@@ -114,14 +129,31 @@ export class NutritionView extends BaseComponent {
 
   afterRender() {
     this.initCharts();
+    const form = this.querySelector('#biometric-form') as HTMLFormElement;
+    form?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+      const todayStr = new Date().toISOString().split('T')[0];
+      store.updateNutrition(todayStr, {
+        weight: Number(formData.get('weight')),
+        bodyFat: Number(formData.get('bodyFat')),
+      });
+    });
   }
 
   private initCharts() {
+    const state = store.getState();
     const trajectoryChartEl = this.querySelector('#trajectory-chart') as HTMLElement;
     if (trajectoryChartEl) {
+      trajectoryChartEl.innerHTML = '';
       const width = trajectoryChartEl.clientWidth;
       const height = trajectoryChartEl.clientHeight || 256;
-      const data = [85, 82, 84, 80, 78, 81, 76, 74, 77, 71, 73, 69];
+
+      const last30Logs = [...state.nutrition]
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .slice(-12); // Display last 12 entries for better spacing
+
+      const data = last30Logs.length > 1 ? last30Logs.map(n => n.weight) : [85, 82, 84, 80, 78, 81, 76, 74, 77, 71, 73, 69];
       const margin = { top: 20, right: 20, bottom: 30, left: 40 };
 
       const svg = d3.select(trajectoryChartEl)
@@ -135,7 +167,7 @@ export class NutritionView extends BaseComponent {
         .padding(0.2);
 
       const y = d3.scaleLinear()
-        .domain([0, 100])
+        .domain([Math.min(...data) - 5, Math.max(...data) + 5])
         .range([height - margin.bottom, margin.top]);
 
       svg.selectAll('rect')
@@ -145,16 +177,24 @@ export class NutritionView extends BaseComponent {
         .attr('x', (_, i) => x(i.toString())!)
         .attr('y', d => y(d))
         .attr('width', x.bandwidth())
-        .attr('height', d => height - margin.bottom - y(d))
-        .attr('fill', (_, i) => i === 7 ? '#006479' : '#00647922')
+        .attr('height', d => Math.max(0, height - margin.bottom - y(d)))
+        .attr('fill', (_, i) => i === data.length - 1 ? '#006479' : '#00647922')
         .attr('rx', 4);
     }
 
     const quotaChartEl = this.querySelector('#quota-chart') as HTMLElement;
     if (quotaChartEl) {
+      quotaChartEl.innerHTML = '';
       const width = quotaChartEl.clientWidth;
       const height = quotaChartEl.clientHeight || 192;
       const radius = Math.min(width, height) / 2 - 10;
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const todayLog = state.nutrition.find(n => n.date === todayStr);
+      const consumed = todayLog ? todayLog.caloriesConsumed : 0;
+      const goal = state.user.goals.dailyCalories;
+      const percentage = Math.min(consumed / goal, 1);
+
       const svg = d3.select(quotaChartEl)
         .append('svg')
         .attr('width', width)
@@ -173,7 +213,7 @@ export class NutritionView extends BaseComponent {
         .attr('d', arc as any);
 
       svg.append('path')
-        .datum({ endAngle: 1.2 * Math.PI })
+        .datum({ endAngle: 2 * Math.PI * percentage })
         .style('fill', '#006a35')
         .attr('d', arc as any);
 
@@ -181,12 +221,12 @@ export class NutritionView extends BaseComponent {
         .attr('text-anchor', 'middle')
         .attr('dy', '0em')
         .attr('class', 'font-headline font-bold text-3xl fill-on-surface')
-        .text('1,840');
+        .text(consumed.toLocaleString());
       svg.append('text')
         .attr('text-anchor', 'middle')
         .attr('dy', '1.5em')
         .attr('class', 'text-[10px] font-bold uppercase tracking-widest fill-on-surface-variant')
-        .text('kcal left');
+        .text('kcal consumed');
     }
   }
 }

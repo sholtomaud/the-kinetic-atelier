@@ -5,6 +5,10 @@ import '@/views/ExerciseLogView';
 import '@/views/NutritionView';
 import '@/views/WorkoutPlannerView';
 import '@/router/AppRouter';
+import { store } from '@/core/Store';
+
+// Make store accessible globally for debugging and simple component access
+(window as any).store = store;
 
 const root = document.getElementById('root');
 if (root) {
