@@ -1,7 +1,36 @@
 import { BaseComponent } from '@/core/BaseComponent';
+import { store } from '@/core/Store';
+import '@/components/LogExerciseModal';
 
 export class ExerciseLogView extends BaseComponent {
+  private unsubscribe: (() => void) | null = null;
+
+  connectedCallback() {
+    super.connectedCallback();
+    this.unsubscribe = store.subscribe(() => this.renderComponent(true));
+  }
+
+  disconnectedCallback() {
+    if (this.unsubscribe) this.unsubscribe();
+  }
+
   protected render() {
+    const workouts = [...store.getState().workouts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Simple PR Calculation (Highest volume or weight recorded in an exercise)
+    const prs: Record<string, { weight: number, date: string }> = {};
+    store.getState().workouts.forEach(w => {
+        w.exercises.forEach(ex => {
+            // Check if there are sets with weight
+            const maxWeight = ex.sets.reduce((max, s) => Math.max(max, s.weight), 0);
+            if (maxWeight > 0) {
+                if (!prs[ex.name] || prs[ex.name].weight < maxWeight) {
+                    prs[ex.name] = { weight: maxWeight, date: w.date };
+                }
+            }
+        });
+    });
+
     return `
       <div class="max-w-7xl mx-auto space-y-8 animate-in slide-in-from-bottom-4 duration-500">
         <div class="flex justify-between items-end">
@@ -9,85 +38,64 @@ export class ExerciseLogView extends BaseComponent {
             <h2 class="text-4xl font-extrabold text-on-surface tracking-tight">Exercise Log</h2>
             <p class="text-on-surface-variant font-medium mt-1">Consistency is the bridge between goals and accomplishment.</p>
           </div>
-          <button class="primary-gradient text-on-primary px-8 py-4 rounded-full font-extrabold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform active:scale-95">
+          <button id="open-log-modal" class="primary-gradient text-on-primary px-8 py-4 rounded-full font-extrabold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform active:scale-95">
             Log New Exercise
           </button>
         </div>
 
         <div class="grid grid-cols-12 gap-8">
           <div class="col-span-12 lg:col-span-8 space-y-6">
-            <div class="flex items-center gap-4">
-              <span class="text-xs font-black uppercase tracking-widest text-outline">Today</span>
-              <div class="h-[1px] flex-1 bg-outline-variant/20"></div>
-            </div>
+            ${workouts.length === 0 ? `
+                <div class="bg-surface-container-low p-12 rounded-3xl text-center border-2 border-dashed border-outline-variant/20">
+                    <i data-lucide="dumbbell" class="w-16 h-16 text-outline-variant mx-auto mb-4 opacity-20"></i>
+                    <p class="text-on-surface-variant font-bold">No sessions logged yet. Your kinetic journey begins with the first rep.</p>
+                </div>
+            ` : workouts.map((w, i) => {
+              const showDateLabel = i === 0 || new Date(w.date).toDateString() !== new Date(workouts[i-1].date).toDateString();
+              const dateObj = new Date(w.date);
+              const isToday = dateObj.toDateString() === new Date().toDateString();
+              const isYesterday = dateObj.toDateString() === new Date(Date.now() - 86400000).toDateString();
 
-            <div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/10 shadow-sm hover:border-primary/30 transition-all group">
-              <div class="flex justify-between items-start mb-6">
-                <div class="flex gap-4">
-                  <div class="w-12 h-12 rounded-xl bg-secondary-container flex items-center justify-center text-secondary">
-                    <i data-lucide="dumbbell"></i>
-                  </div>
-                  <div>
-                    <h3 class="text-xl font-bold text-on-surface">Hypertrophy Upper Body</h3>
-                    <p class="text-sm text-on-surface-variant font-medium flex items-center gap-2">
-                      <i data-lucide="clock" class="w-3 h-3"></i> 08:30 AM • 72 mins
-                    </p>
-                  </div>
-                </div>
-                <div class="text-right">
-                  <span class="text-2xl font-black text-secondary">2,450 kg</span>
-                  <p class="text-[10px] font-bold uppercase text-outline tracking-tighter">Total Volume</p>
-                </div>
-              </div>
-              <div class="space-y-3">
-                <div class="flex justify-between p-4 rounded-lg bg-surface-container-low/50 group-hover:bg-surface-container-low transition-colors">
-                  <span class="font-bold">Barbell Bench Press</span>
-                  <span class="text-sm text-on-surface-variant">4 sets • 100kg x 8</span>
-                </div>
-                <div class="flex justify-between p-4 rounded-lg bg-surface-container-low/50 group-hover:bg-surface-container-low transition-colors">
-                  <span class="font-bold">Weighted Pull-ups</span>
-                  <span class="text-sm text-on-surface-variant">3 sets • BW+20kg x 6</span>
-                </div>
-                <div class="flex justify-between p-4 rounded-lg bg-surface-container-low/50 group-hover:bg-surface-container-low transition-colors">
-                  <span class="font-bold">Seated Dumbbell Press</span>
-                  <span class="text-sm text-on-surface-variant">3 sets • 32kg x 10</span>
-                </div>
-              </div>
-            </div>
+              let dateLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              if (isToday) dateLabel = 'Today';
+              if (isYesterday) dateLabel = 'Yesterday';
 
-            <div class="flex items-center gap-4 mt-8">
-              <span class="text-xs font-black uppercase tracking-widest text-outline">Yesterday</span>
-              <div class="h-[1px] flex-1 bg-outline-variant/20"></div>
-            </div>
-            <div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/10 shadow-sm hover:border-primary/30 transition-all group">
-              <div class="flex justify-between items-start mb-6">
-                <div class="flex gap-4">
-                  <div class="w-12 h-12 rounded-xl bg-tertiary-container flex items-center justify-center text-tertiary">
-                    <i data-lucide="zap"></i>
+              return `
+                ${showDateLabel ? `
+                  <div class="flex items-center gap-4 ${i > 0 ? 'mt-8' : ''}">
+                    <span class="text-xs font-black uppercase tracking-widest text-outline">${dateLabel}</span>
+                    <div class="h-[1px] flex-1 bg-outline-variant/20"></div>
                   </div>
-                  <div>
-                    <h3 class="text-xl font-bold text-on-surface">Threshold Training</h3>
-                    <p class="text-sm text-on-surface-variant font-medium flex items-center gap-2">
-                      <i data-lucide="calendar" class="w-3 h-3"></i> Oct 24 • 45 mins
-                    </p>
+                ` : ''}
+                <div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/10 shadow-sm hover:border-primary/30 transition-all group">
+                  <div class="flex justify-between items-start mb-6">
+                    <div class="flex gap-4">
+                      <div class="w-12 h-12 rounded-xl ${w.type === 'Strength' ? 'bg-secondary-container text-secondary' : 'bg-tertiary-container text-tertiary'} flex items-center justify-center">
+                        <i data-lucide="${w.type === 'Strength' ? 'dumbbell' : 'zap'}"></i>
+                      </div>
+                      <div>
+                        <h3 class="text-xl font-bold text-on-surface">${w.title}</h3>
+                        <p class="text-sm text-on-surface-variant font-medium flex items-center gap-2">
+                          <i data-lucide="clock" class="w-3 h-3"></i> ${new Date(w.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${w.duration} mins
+                        </p>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-2xl font-black ${w.type === 'Strength' ? 'text-secondary' : 'text-tertiary'}">${w.volume > 0 ? w.volume + ' kg' : (w.duration * 8) + ' XP'}</span>
+                      <p class="text-[10px] font-bold uppercase text-outline tracking-tighter">${w.volume > 0 ? 'Total Volume' : 'Performance XP'}</p>
+                    </div>
+                  </div>
+                  <div class="space-y-3">
+                    ${w.exercises.map(ex => `
+                        <div class="flex justify-between p-4 rounded-lg bg-surface-container-low/50 group-hover:bg-surface-container-low transition-colors">
+                            <span class="font-bold">${ex.name}</span>
+                            <span class="text-sm text-on-surface-variant">${ex.sets.length > 0 ? `${ex.sets.length} sets • ${ex.sets[0].weight}kg x ${ex.sets[0].reps}` : ''}</span>
+                        </div>
+                    `).join('')}
                   </div>
                 </div>
-                <div class="text-right">
-                  <span class="text-2xl font-black text-tertiary">8.2 km</span>
-                  <p class="text-[10px] font-bold uppercase text-outline tracking-tighter">Distance Covered</p>
-                </div>
-              </div>
-              <div class="grid grid-cols-2 gap-4">
-                <div class="bg-surface-container-low/50 p-4 rounded-lg">
-                  <p class="text-[10px] font-bold uppercase text-outline mb-1">Avg Pace</p>
-                  <p class="text-lg font-bold">5'24"/km</p>
-                </div>
-                <div class="bg-surface-container-low/50 p-4 rounded-lg">
-                  <p class="text-[10px] font-bold uppercase text-outline mb-1">Avg HR</p>
-                  <p class="text-lg font-bold">158 bpm</p>
-                </div>
-              </div>
-            </div>
+              `;
+            }).join('')}
           </div>
 
           <div class="col-span-12 lg:col-span-4 space-y-6">
@@ -97,39 +105,38 @@ export class ExerciseLogView extends BaseComponent {
                 <i data-lucide="trophy" class="text-primary-fixed-dim fill-current"></i>
               </div>
               <div class="space-y-6">
-                <div class="flex items-center gap-4">
-                  <div class="w-1 bg-secondary rounded-full h-12"></div>
-                  <div class="flex-1">
-                    <div class="flex justify-between items-baseline">
-                      <span class="font-bold">Squat</span>
-                      <span class="text-2xl font-black text-secondary">165kg</span>
+                ${Object.entries(prs).length > 0 ? Object.entries(prs).map(([name, data]) => `
+                    <div class="flex items-center gap-4">
+                      <div class="w-1 bg-secondary rounded-full h-12"></div>
+                      <div class="flex-1">
+                        <div class="flex justify-between items-baseline">
+                          <span class="font-bold">${name}</span>
+                          <span class="text-2xl font-black text-secondary">${data.weight}kg</span>
+                        </div>
+                        <div class="flex justify-between items-center mt-1">
+                          <span class="text-[10px] font-bold text-outline uppercase tracking-wider">${new Date(data.date).toLocaleDateString()}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div class="flex justify-between items-center mt-1">
-                      <span class="text-[10px] font-bold text-outline uppercase tracking-wider">Aug 12, 2023</span>
-                      <span class="text-[10px] font-bold text-secondary-dim bg-secondary-container px-2 py-0.5 rounded-full">+5kg</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="flex items-center gap-4">
-                  <div class="w-1 bg-secondary rounded-full h-12"></div>
-                  <div class="flex-1">
-                    <div class="flex justify-between items-baseline">
-                      <span class="font-bold">Deadlift</span>
-                      <span class="text-2xl font-black text-secondary">210kg</span>
-                    </div>
-                    <p class="text-[10px] font-bold text-outline uppercase tracking-wider">Sep 30, 2023</p>
-                  </div>
-                </div>
+                `).join('') : `
+                    <p class="text-sm text-on-surface-variant italic">Start training to record your first PRs.</p>
+                `}
               </div>
               <div class="mt-10 p-4 bg-surface-container-highest/30 rounded-xl border border-primary/10">
                 <h5 class="font-bold text-sm text-primary mb-2">Elite Progress Insight</h5>
-                <p class="text-xs text-on-surface-variant leading-relaxed">You are in the top 5% of your age bracket for the deadlift. Continue focused posterior chain work.</p>
+                <p class="text-xs text-on-surface-variant leading-relaxed">Consistency is key. You've logged ${workouts.length} sessions. Keep pushing your limits.</p>
               </div>
             </div>
           </div>
         </div>
       </div>
     `;
+  }
+
+  afterRender() {
+    this.querySelector('#open-log-modal')?.addEventListener('click', () => {
+      document.body.appendChild(document.createElement('log-exercise-modal'));
+    });
   }
 }
 

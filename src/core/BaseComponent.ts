@@ -11,8 +11,8 @@ export abstract class BaseComponent extends HTMLElement {
     this.renderComponent();
   }
 
-  protected renderComponent() {
-    if (this.dataset.rendered) return;
+  protected renderComponent(force = false) {
+    if (this.dataset.rendered && !force) return;
     this.innerHTML = this.render();
     this.renderIcons();
     this.afterRender();
