@@ -19,9 +19,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Select Xcode
-      run: sudo xcode-select -s /Applications/Xcode_15.0.app/Contents/Developer
-
     - name: Run Tests (SPM)
       working-directory: mobile
       run: swift test
