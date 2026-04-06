@@ -59,7 +59,7 @@ test('DynamoDB Table Created with Correct Keys', () => {
       { AttributeName: 'SK', AttributeType: 'S' }
     ],
     BillingMode: 'PAY_PER_REQUEST',
-    TableName: 'KineticAtelierTable'
+    TableName: Match.stringLikeRegexp('KineticAtelierTable-.*')
   });
 });
 

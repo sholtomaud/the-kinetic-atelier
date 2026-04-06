@@ -17,6 +17,9 @@ export class InfraStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    const envName = this.node.tryGetContext('env') || 'dev';
+    const isProd = envName === 'prod';
+
     // 1. Implement Cognito User Pool
     const userPool = new cognito.UserPool(this, 'KineticAtelierUserPool', {
       userPoolName: 'KineticAtelierUserPool',
@@ -33,7 +36,17 @@ export class InfraStack extends cdk.Stack {
         requireDigits: true,
         requireSymbols: true,
       },
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Google Identity Provider (Placeholder)
+    const googleIdP = new cognito.UserPoolIdentityProviderGoogle(this, 'GoogleIdP', {
+      userPool: userPool,
+      clientId: 'GOOGLE_CLIENT_ID', // Placeholder
+      clientSecret: 'GOOGLE_CLIENT_SECRET', // Placeholder
+      attributeMapping: {
+        email: cognito.ProviderAttribute.GOOGLE_EMAIL,
+      },
     });
 
     const userPoolClient = new cognito.UserPoolClient(this, 'KineticAtelierUserPoolClient', {
@@ -43,8 +56,12 @@ export class InfraStack extends cdk.Stack {
           authorizationCodeGrant: true,
         },
         scopes: [cognito.OAuthScope.EMAIL, cognito.OAuthScope.OPENID, cognito.OAuthScope.PROFILE],
-        callbackUrls: ['http://localhost:5173', 'kinetic-atelier://callback'],
-        logoutUrls: ['http://localhost:5173', 'kinetic-atelier://logout'],
+        callbackUrls: isProd
+          ? ['https://kinetic-atelier.app/callback', 'kinetic-atelier://callback']
+          : ['http://localhost:5173/callback', 'kinetic-atelier://callback'],
+        logoutUrls: isProd
+          ? ['https://kinetic-atelier.app/logout', 'kinetic-atelier://logout']
+          : ['http://localhost:5173/logout', 'kinetic-atelier://logout'],
       },
       supportedIdentityProviders: [
         cognito.UserPoolClientIdentityProvider.COGNITO,
@@ -55,14 +72,16 @@ export class InfraStack extends cdk.Stack {
         custom: true, // For WebAuthn/Passkey
       },
     });
+    userPoolClient.node.addDependency(googleIdP);
 
     // 2. Implement DynamoDB Table (KineticAtelierTable)
+
     const table = new dynamodb.Table(this, 'KineticAtelierTable', {
-      tableName: 'KineticAtelierTable',
+      tableName: `KineticAtelierTable-${envName}`,
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev purposes
+      removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
     // 3. Implement EventBridge Custom Event Bus
