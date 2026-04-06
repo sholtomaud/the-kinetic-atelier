@@ -1,0 +1,35 @@
+name: Mobile CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/mobile.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/mobile.yml'
+
+jobs:
+  test:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Select Xcode
+      run: sudo xcode-select -s /Applications/Xcode_15.0.app/Contents/Developer
+
+    - name: Run Tests (SPM)
+      working-directory: mobile
+      run: swift test
+
+    - name: Run SwiftLint
+      run: |
+        if which swiftlint >/dev/null; then
+          swiftlint mobile
+        else
+          echo "warning: SwiftLint not found on runner"
+        fi
