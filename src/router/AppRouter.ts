@@ -12,7 +12,7 @@ export class AppRouter extends BaseComponent {
     super.connectedCallback();
     window.addEventListener('popstate', () => this.handleRoute());
     document.addEventListener('click', (e) => this.handleGlobalClick(e));
-    this.handleRoute();
+    // Initial route handling will be triggered by main.ts or on load
   }
 
   addRoute(path: string, componentTagName: string) {
@@ -61,4 +61,6 @@ export class AppRouter extends BaseComponent {
   }
 }
 
-customElements.define('app-router', AppRouter);
+if (!customElements.get('app-router')) {
+    customElements.define('app-router', AppRouter);
+}

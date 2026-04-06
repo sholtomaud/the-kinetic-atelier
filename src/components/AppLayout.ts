@@ -66,7 +66,8 @@ export class AppLayout extends BaseComponent {
             </div>
           </header>
 
-          <div class="flex-1 p-8" id="layout-content">
+          <div class="flex-1 p-8">
+             <div id="layout-content"></div>
           </div>
         </main>
       </div>
