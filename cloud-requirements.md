@@ -42,11 +42,21 @@ This document outlines the infrastructure and functional requirements for hostin
 ### E. Static Hosting
 - **AWS S3 + CloudFront**: For hosting the compiled Vite application assets.
 
+### F. Authentication (Native AWS Auth)
+- **Cognito User Pool**: Identity provider for user registration and sign-in.
+  - **Attributes**: Email is the primary sign-in attribute.
+  - **Social Auth**: Support for Google as a Social Identity Provider.
+  - **Passwordless/Biometrics**: Enable WebAuthn/Passkey support for seamless authentication.
+- **Cognito Identity Pool**: Provides temporary AWS credentials for authenticated users.
+  - **Role-Based Access**: Authenticated users are granted IAM permissions to invoke the API Gateway.
+- **IAM Authorization**: API Gateway methods are protected using `AWS_IAM` authorization. Clients must sign requests using SigV4.
+
 ## 3. Functional Requirements
 
 ### User & Profile Management
 - **Action**: Fetch user profile and goals.
-- **Implementation**: API Gateway GET -> DynamoDB GetItem.
+- **Implementation**: API Gateway GET `/profile` -> DynamoDB GetItem.
+- **PK/SK**: `PK: USER#<identityId>`, `SK: PROFILE#<identityId>`.
 - **Requirement**: Return current weight, goals, and "Pro" status.
 
 ### Workout Logging

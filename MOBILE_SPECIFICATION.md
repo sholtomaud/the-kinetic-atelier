@@ -17,7 +17,14 @@ The Kinetic Atelier mobile application is a native SwiftUI companion to the web 
   - View weight trends over configurable timeframes (7 days, 30 days, 90 days, All time).
   - Calculate velocity and delta relative to user-defined goals.
 
-### 2.2 Feature Parity with Web Platform
+### 2.2 Native Authentication & API
+- **Cognito & IAM**:
+  - Secure login using AWS Cognito User Pool and Identity Pool.
+  - Multi-factor authentication support including biometric (Passkeys/FaceID/TouchID).
+  - Google Social Login integration.
+- **Signed API Requests**: All communication with the backend is performed using IAM-authorized REST calls (SigV4).
+
+### 2.3 Feature Parity with Web Platform
 - **Dashboard**: High-level summary of active days, calories burned, and current progress.
 - **Exercise Log**:
   - Log new workouts (Strength, HIIT, etc.).
@@ -98,3 +105,20 @@ The Kinetic Atelier mobile application is a native SwiftUI companion to the web 
   - **Unit Tests**: Execute `xcodebuild test` for the iOS target using a destination simulator (e.g., iPhone 15).
   - **Build Verification**: Ensure the app compiles for both iOS and Simulator architectures.
   - **Artifacts**: Upload test results and build logs for failure diagnosis.
+
+## 6. Authentication Architecture (SwiftUI)
+
+### 6.1 AuthService (MVVM)
+- **Role**: Centralized service for managing user sessions and authentication flows.
+- **Implementation**:
+  - Integrate with **AWS Mobile SDK for iOS** (Amplify or low-level Cognito/IAM SDKs).
+  - **Methods**:
+    - `signInWithEmail(email:password:)`: SRP-based authentication.
+    - `signInWithGoogle()`: OAuth2 flow using `ASWebAuthenticationSession`.
+    - `registerPasskey()`: WebAuthn registration via `AuthenticationServices` framework.
+    - `signInWithPasskey()`: Biometric authentication via `ASAuthorizationPlatformPublicKeyCredentialProvider`.
+  - **Session Management**: Store temporary IAM credentials and handle background token refreshing.
+
+### 6.2 SigV4 Interceptor
+- **Role**: Automatically sign all outgoing REST API requests with AWS Signature Version 4.
+- **Implementation**: Custom `URLSession` or middleware to inject `Authorization`, `X-Amz-Date`, and `X-Amz-Security-Token` headers.
